@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Route Planner</title>
+  <meta name="description" content="Last-mile delivery routing for a made-up grocery delivery service: plan a day of van routes with time windows, capacities, refrigerated orders, and shifts, compare construction heuristics, local search, and ALNS, then re-plan when new orders, a road closure, and a van breakdown arrive.">
+  <link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>Route Planner</h1>
+      <p class="sub">Next-day grocery deliveries for Ashgrove Pantry, a made-up regional grocer: one depot, a fleet of ambient and refrigerated vans on two shifts, and 150 to 400 orders with delivery windows. Plan the day, then play it with new orders, a bridge closure, and a breakdown.</p>
+    </div>
+    <div class="actions">
+      <button type="button" id="share">Copy share link</button>
+      <button type="button" id="reset" class="ghost">Reset</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <form id="form" class="panel" autocomplete="off"></form>
+
+    <section class="results">
+      <div class="panel rec">
+        <div class="chart-head"><h2>Day plan</h2><span class="hint tl-run" id="status"></span></div>
+        <p id="rec" class="rec-text">Solving...</p>
+      </div>
+
+      <div class="cards" id="cards"></div>
+
+      <div class="panel">
+        <div class="chart-head">
+          <h2>City map</h2>
+          <div class="tabs" id="view-tabs" role="tablist" aria-label="View">
+            <button type="button" class="tab" role="tab" data-view="plan">Morning plan</button>
+            <button type="button" class="tab" role="tab" data-view="day">Played day</button>
+          </div>
+        </div>
+        <div class="subtabs">
+          <div class="tabs" id="algo-tabs" role="tablist" aria-label="Algorithm"></div>
+          <div class="tabs" id="strat-tabs" role="tablist" aria-label="Re-planning strategy" hidden></div>
+        </div>
+        <div class="clock" id="clock" hidden>
+          <button type="button" id="play">Play the day</button>
+          <input type="range" id="time" min="420" max="1290" step="5" value="1290" aria-label="Time of day">
+          <b id="time-label">21:30</b>
+        </div>
+        <ul class="legend" id="map-legend"></ul>
+        <div class="chart-wrap map-wrap"><svg id="map" class="chart map" viewBox="0 0 600 600" role="img" aria-label="City map with the depot, stops, and van routes"></svg><div class="tooltip" hidden></div></div>
+        <ol class="events" id="events" hidden></ol>
+        <p class="hint" id="map-note"></p>
+      </div>
+
+      <div class="panel">
+        <div class="chart-head">
+          <h2>Van timelines</h2>
+          <ul class="legend">
+            <li><i class="swatch shift"></i>Shift</li>
+            <li><i class="swatch svc-ok"></i>Delivery on time</li>
+            <li><i class="swatch svc-late"></i>Late</li>
+            <li><i class="swatch wait"></i>Waiting for the window</li>
+            <li><i class="linekey win"></i>Window of the stop</li>
+          </ul>
+        </div>
+        <p class="hint pack-sub" id="gantt-sub"></p>
+        <div class="chart-wrap"><svg id="gantt" class="chart" role="img" aria-label="Timeline per van with deliveries and time windows"></svg><div class="tooltip" hidden></div></div>
+      </div>
+
+      <div class="panel">
+        <div class="chart-head"><h2>Algorithms on this day</h2></div>
+        <div class="table-scroll">
+          <table class="items" id="algo-table">
+            <thead><tr>
+              <th>Algorithm</th>
+              <th class="num" title="Van fixed cost, driver hours, km, and $150 per order not delivered">Cost</th>
+              <th class="num">Km</th>
+              <th class="num">Vans</th>
+              <th class="num" title="Orders the plan does not serve">Unserved</th>
+              <th class="num" title="Crates loaded over the capacity of the vans used">Load</th>
+              <th class="num" title="Driving and service time over paid hours">Time used</th>
+              <th class="num" title="Share of deliveries inside the window when the plan is driven with travel and service time noise">On time, driven</th>
+              <th class="num" title="Time to compute the plan in this browser">Compute</th>
+            </tr></thead>
+            <tbody id="algo-rows"></tbody>
+          </table>
+        </div>
+        <p class="hint" id="algo-note"></p>
+        <h3 class="sub-h">ALNS search</h3>
+        <ul class="legend"><li><i class="swatch s-cur"></i>Current solution</li><li><i class="swatch s-best"></i>Best so far</li></ul>
+        <div class="chart-wrap"><svg id="conv" class="chart" role="img" aria-label="ALNS cost by iteration"></svg><div class="tooltip" hidden></div></div>
+        <p class="hint" id="ops-note"></p>
+      </div>
+
+      <div class="panel">
+        <div class="chart-head"><h2>Re-planning during the day</h2><span class="hint tl-run" id="day-status"></span></div>
+        <p class="hint pack-sub">The ALNS plan is driven with noise. At 11:00 new orders arrive, at 12:30 a bridge closes, and at 13:30 the van with the most stops left breaks down. Stops a van has already left for stay committed.</p>
+        <div class="table-scroll">
+          <table class="items" id="day-table">
+            <thead><tr>
+              <th>Strategy</th>
+              <th class="num" title="Van cost, overtime, late minutes at $1.50, $150 per order not delivered, and the tow">Day cost</th>
+              <th class="num" title="Orders delivered, of all orders including those placed during the day">Delivered</th>
+              <th class="num" title="Orders placed at 11:00 that were delivered">New orders</th>
+              <th class="num" title="Deliveries inside the window">On time</th>
+              <th class="num" title="Minutes after the window, summed">Late min</th>
+              <th class="num" title="Minutes past shift end, summed over vans">Overtime</th>
+              <th class="num">Km</th>
+              <th class="num" title="Time for all three re-plans">Compute</th>
+            </tr></thead>
+            <tbody id="day-rows"></tbody>
+          </table>
+        </div>
+        <p class="hint" id="day-note"></p>
+      </div>
+
+      <div class="panel">
+        <div class="chart-head">
+          <h2>ETA accuracy</h2>
+          <div class="tabs" id="eta-tabs" role="tablist" aria-label="Day">
+            <button type="button" class="tab" role="tab" data-view="normal">Normal day</button>
+            <button type="button" class="tab" role="tab" data-view="reopt">Played day, re-optimized</button>
+          </div>
+        </div>
+        <p class="hint pack-sub" id="eta-sub"></p>
+        <div class="chart-wrap"><svg id="eta" class="chart" role="img" aria-label="Histogram of actual minus predicted arrival"></svg><div class="tooltip" hidden></div></div>
+        <div class="table-scroll">
+          <table class="items" id="eta-table">
+            <thead><tr>
+              <th>Stop position in route</th>
+              <th class="num">Stops</th>
+              <th class="num" title="Mean absolute error of the predicted arrival">Mean abs error</th>
+            </tr></thead>
+            <tbody id="eta-rows"></tbody>
+          </table>
+        </div>
+        <p class="hint" id="eta-note"></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">Runs entirely in your browser; the solvers run in a Web Worker. Settings are stored in the page URL so a scenario can be shared as a link. Ashgrove Pantry, its city, orders, and costs are made up.</footer>
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>

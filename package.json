@@ -1,0 +1,11 @@
+{
+  "name": "route-planner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Last-mile delivery routing with time windows, capacities, refrigerated orders, and re-planning during the day.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test"
+  }
+}
